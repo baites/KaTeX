@@ -1,37 +1,60 @@
+// @flow
 import buildHTML from "./buildHTML";
 import buildMathML from "./buildMathML";
-import { makeSpan } from "./buildCommon";
+import buildCommon from "./buildCommon";
 import Options from "./Options";
 import Settings from "./Settings";
 import Style from "./Style";
 
-const buildTree = function(tree, expression, settings) {
-    settings = settings || new Settings({});
+import type {AnyParseNode} from "./parseNode";
+import type {DomSpan} from "./domTree";
 
-    let startStyle = Style.TEXT;
-    if (settings.displayMode) {
-        startStyle = Style.DISPLAY;
-    }
-
-    // Setup the default options
-    const options = new Options({
-        style: startStyle,
+const optionsFromSettings = function(settings: Settings) {
+    return new Options({
+        style: (settings.displayMode ? Style.DISPLAY : Style.TEXT),
+        maxSize: settings.maxSize,
     });
+};
 
-    // `buildHTML` sometimes messes with the parse tree (like turning bins ->
-    // ords), so we build the MathML version first.
+const displayWrap = function(node: DomSpan, settings: Settings): DomSpan {
+    if (settings.displayMode) {
+        const classes = ["katex-display"];
+        if (settings.leqno) {
+            classes.push("leqno");
+        }
+        if (settings.fleqn) {
+            classes.push("fleqn");
+        }
+        node = buildCommon.makeSpan(classes, [node]);
+    }
+    return node;
+};
+
+export const buildTree = function(
+    tree: AnyParseNode[],
+    expression: string,
+    settings: Settings,
+): DomSpan {
+    const options = optionsFromSettings(settings);
     const mathMLNode = buildMathML(tree, expression, options);
     const htmlNode = buildHTML(tree, options);
 
-    const katexNode = makeSpan(["katex"], [
+    const katexNode = buildCommon.makeSpan(["katex"], [
         mathMLNode, htmlNode,
     ]);
 
-    if (settings.displayMode) {
-        return makeSpan(["katex-display"], [katexNode]);
-    } else {
-        return katexNode;
-    }
+    return displayWrap(katexNode, settings);
 };
 
-module.exports = buildTree;
+export const buildHTMLTree = function(
+    tree: AnyParseNode[],
+    expression: string,
+    settings: Settings,
+): DomSpan {
+    const options = optionsFromSettings(settings);
+    const htmlNode = buildHTML(tree, options);
+    const katexNode = buildCommon.makeSpan(["katex"], [htmlNode]);
+    return displayWrap(katexNode, settings);
+};
+
+export default buildTree;
